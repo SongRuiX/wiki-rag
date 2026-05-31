@@ -1,3 +1,4 @@
+import logging
 import tempfile
 from pathlib import Path
 import json
@@ -69,3 +70,30 @@ class TestSyncManager:
         })
         plan = sync_mgr.sync(str(tmp_path), mode="incremental")
         assert len(plan.new_files) == 2
+
+
+def test_sync_logs_start_and_completion(caplog, tmp_path):
+    """同步应输出 INFO 级别的开始和完成日志。"""
+    from src.chunker import Chunker
+    from src.embedder import MockEmbedder
+    from src.vector_store import MockVectorStore
+    from src.sync_strategy import SyncManager
+
+    md_file = tmp_path / "test.md"
+    md_file.write_text("# 标题\n内容", encoding="utf-8")
+
+    chunker = Chunker()
+    embedder = MockEmbedder(dimension=4)
+    store = MockVectorStore()
+    mgr = SyncManager(chunker, embedder, store)
+
+    from src.logger import setup_logging
+    setup_logging(str(tmp_path / "test_sync.log"))
+
+    with caplog.at_level(logging.INFO, logger="src.sync_strategy"):
+        plan = mgr.sync(str(tmp_path), mode="incremental")
+
+    log_text = caplog.text
+    assert "同步开始" in log_text
+    assert "同步完成" in log_text
+    assert plan is not None

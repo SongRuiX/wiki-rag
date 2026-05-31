@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 from datetime import datetime, timezone
@@ -7,6 +8,8 @@ from src.chunker import Chunker
 from src.embedder import Embedder
 from src.vector_store import VectorStore
 from src.models import SyncPlan
+
+logger = logging.getLogger(__name__)
 
 
 class SyncManager:
@@ -18,8 +21,10 @@ class SyncManager:
         self.vector_store = vector_store
 
     def sync(self, path: str, mode: str = "incremental") -> SyncPlan:
+        logger.info("同步开始: path=%s, mode=%s", path, mode)
         path = os.path.abspath(path)
         md_files = self._scan_files(path)
+        logger.debug("扫描到 %d 个 Markdown 文件", len(md_files))
         metadata_path = os.path.join(path, self.METADATA_FILENAME)
 
         if mode == "full":
@@ -36,7 +41,9 @@ class SyncManager:
             plan.total_chunks_estimate = len(plan.new_files) + len(plan.updated_files)
             self._execute_plan(path, plan)
 
+        logger.info("变更统计: new=%d, updated=%d, deleted=%d", len(plan.new_files), len(plan.updated_files), len(plan.deleted_files))
         self._save_metadata(metadata_path, md_files)
+        logger.info("同步完成: path=%s", path)
         return plan
 
     def _scan_files(self, root: str) -> dict[str, str]:
