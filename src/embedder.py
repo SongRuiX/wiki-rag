@@ -1,7 +1,12 @@
+import logging
+import time
 from abc import ABC, abstractmethod
+
 import numpy as np
 import requests
 from openai import OpenAI
+
+logger = logging.getLogger(__name__)
 
 
 class Embedder(ABC):
@@ -49,16 +54,24 @@ class OllamaEmbedder(Embedder):
         return self._dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        logger.debug("Ollama 嵌入请求: texts=%d, model=%s", len(texts), self.model)
+        start = time.perf_counter()
         all_vectors: list[list[float]] = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            resp = requests.post(
-                f"{self.base_url}/api/embed",
-                json={"model": self.model, "input": batch},
-                timeout=60,
-            )
-            resp.raise_for_status()
-            all_vectors.extend(resp.json()["embeddings"])
+        try:
+            for i in range(0, len(texts), self.batch_size):
+                batch = texts[i : i + self.batch_size]
+                resp = requests.post(
+                    f"{self.base_url}/api/embed",
+                    json={"model": self.model, "input": batch},
+                    timeout=60,
+                )
+                resp.raise_for_status()
+                all_vectors.extend(resp.json()["embeddings"])
+        except requests.RequestException as e:
+            logger.error("Ollama 嵌入请求失败: %s", e)
+            raise
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.debug("Ollama 嵌入完成: texts=%d, elapsed=%.1fms", len(texts), elapsed)
         return all_vectors
 
     def embed_query(self, text: str) -> list[float]:
@@ -76,7 +89,15 @@ class OpenAIEmbedder(Embedder):
         return self._dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        resp = self.client.embeddings.create(model=self.model, input=texts)
+        logger.debug("OpenAI 嵌入请求: texts=%d, model=%s", len(texts), self.model)
+        start = time.perf_counter()
+        try:
+            resp = self.client.embeddings.create(model=self.model, input=texts)
+        except Exception as e:
+            logger.error("OpenAI 嵌入请求失败: %s", e)
+            raise
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.debug("OpenAI 嵌入完成: texts=%d, elapsed=%.1fms", len(texts), elapsed)
         return [d.embedding for d in resp.data]
 
     def embed_query(self, text: str) -> list[float]:
