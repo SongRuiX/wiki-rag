@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 from mcp.server.fastmcp import FastMCP
 from src.config import load_config
 from src.embedder import OllamaEmbedder, OpenAIEmbedder, MockEmbedder
@@ -58,13 +59,28 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--config", default=None, help="Path to config.yaml")
+    parser.add_argument("--mock", action="store_true", help="Use mock embedder and vector store (no external deps)")
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.mock:
+        config["embedding"]["provider"] = "mock"
+        config["vector_store"]["type"] = "mock"
     mcp_cfg = config.get("mcp_server", {})
-    sync_manager, retriever, retrieval_cfg = build_components(config)
 
-    mcp = FastMCP(name="wiki-rag")
+    try:
+        sync_manager, retriever, retrieval_cfg = build_components(config)
+    except Exception as e:
+        print(f"启动失败: {e}", file=sys.stderr)
+        print("提示: 使用 --mock 标志跳过外部服务依赖进行测试", file=sys.stderr)
+        sys.exit(1)
+
+    transport = args.transport or mcp_cfg.get("transport", "streamable-http")
+    host = args.host or mcp_cfg.get("host", "127.0.0.1")
+    port = args.port or mcp_cfg.get("port", 8000)
+    mount_path = mcp_cfg.get("mount_path", "/mcp")
+
+    mcp = FastMCP(name="wiki-rag", host=host, port=port, mount_path=mount_path)
 
     @mcp.tool()
     def wiki_rag_sync(path: str, mode: str = "incremental") -> str:
@@ -108,17 +124,7 @@ def main():
             })
         return json.dumps(items, ensure_ascii=False)
 
-    transport = args.transport or mcp_cfg.get("transport", "streamable-http")
-    host = args.host or mcp_cfg.get("host", "127.0.0.1")
-    port = args.port or mcp_cfg.get("port", 8000)
-    mount_path = mcp_cfg.get("mount_path", "/mcp")
-
-    if transport == "stdio":
-        mcp.run(transport="stdio")
-    elif transport == "sse":
-        mcp.run(transport="sse", host=host, port=port, mount_path=mount_path)
-    else:
-        mcp.run(transport="streamable-http", host=host, port=port, mount_path=mount_path)
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":
