@@ -6,8 +6,14 @@ def setup_logging(log_file: str = "./wiki-rag.log") -> None:
     """配置日志系统。控制台 INFO 级别，文件 DEBUG 级别。
 
     调用后，所有模块通过 logging.getLogger(__name__) 获取已配置的 logger。
+    幂等操作：重复调用不会添加重复的 handler。
     """
     root = logging.getLogger()
+
+    # 幂等守卫：已配置则跳过
+    if root.handlers:
+        return
+
     root.setLevel(logging.DEBUG)
 
     fmt = logging.Formatter(

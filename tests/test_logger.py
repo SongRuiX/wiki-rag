@@ -4,15 +4,21 @@ import tempfile
 from src.logger import setup_logging
 
 
+def _clear_root_handlers():
+    """Remove all handlers from root logger (for test isolation)."""
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        h.close()
+        root.removeHandler(h)
+
+
 def test_setup_logging_creates_file_handler():
     """setup_logging should add a file handler and a console handler."""
     with tempfile.TemporaryDirectory() as d:
         log_path = os.path.join(d, "test.log")
         root = logging.getLogger()
 
-        initial_file_count = len([h for h in root.handlers if isinstance(h, logging.FileHandler)])
-        initial_stream_count = len([h for h in root.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)])
-        initial_total = len(root.handlers)
+        _clear_root_handlers()
 
         new_file_handler = None
         new_stream_handler = None
@@ -20,19 +26,18 @@ def test_setup_logging_creates_file_handler():
             setup_logging(log_path)
 
             # 断言：新增了两个 handler（文件 + 控制台）
-            assert len(root.handlers) == initial_total + 2
+            assert len(root.handlers) == 2
 
-            # 断言：文件 handler 增加了 1，且能找到指向 log_path 的那个
+            # 断言：文件 handler 存在
             file_handlers = [h for h in root.handlers if isinstance(h, logging.FileHandler)]
-            assert len(file_handlers) == initial_file_count + 1
-            matching = [h for h in file_handlers if h.baseFilename == os.path.abspath(log_path)]
-            assert len(matching) == 1
-            new_file_handler = matching[0]
+            assert len(file_handlers) == 1
+            assert file_handlers[0].baseFilename == os.path.abspath(log_path)
+            new_file_handler = file_handlers[0]
 
-            # 断言：StreamHandler (非 FileHandler) 增加了 1
+            # 断言：控制台 handler 存在
             stream_handlers = [h for h in root.handlers if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)]
-            assert len(stream_handlers) == initial_stream_count + 1
-            new_stream_handler = stream_handlers[-1]
+            assert len(stream_handlers) == 1
+            new_stream_handler = stream_handlers[0]
 
             # 断言：文件 handler 级别为 DEBUG
             assert new_file_handler.level == logging.DEBUG
@@ -40,7 +45,6 @@ def test_setup_logging_creates_file_handler():
             # 断言：控制台 handler 级别为 INFO
             assert new_stream_handler.level == logging.INFO
         finally:
-            # 清理新增的 handler
             if new_file_handler is not None:
                 new_file_handler.close()
                 root.removeHandler(new_file_handler)
@@ -55,11 +59,12 @@ def test_setup_logging_actually_writes_to_file():
         log_path = os.path.join(d, "test.log")
         root = logging.getLogger()
 
+        _clear_root_handlers()
+
         added = []
         try:
             setup_logging(log_path)
-            # Track which handlers we added (the last 2)
-            added = list(root.handlers)[-2:]
+            added = list(root.handlers)
 
             logger = logging.getLogger("test_writer")
             logger.info("hello world")
@@ -89,10 +94,12 @@ def test_setup_logging_format():
         log_path = os.path.join(d, "test.log")
         root = logging.getLogger()
 
+        _clear_root_handlers()
+
         added = []
         try:
             setup_logging(log_path)
-            added = list(root.handlers)[-2:]
+            added = list(root.handlers)
 
             logger = logging.getLogger("src.sync_strategy")
 
@@ -116,3 +123,25 @@ def test_setup_logging_format():
             for h in added:
                 h.close()
                 root.removeHandler(h)
+
+
+def test_setup_logging_is_idempotent():
+    """重复调用 setup_logging 不会添加重复 handler。"""
+    root = logging.getLogger()
+    _clear_root_handlers()
+
+    added = []
+    try:
+        setup_logging("./test_idem.log")
+        handler_count_1 = len(root.handlers)
+
+        setup_logging("./test_idem.log")
+        handler_count_2 = len(root.handlers)
+
+        assert handler_count_1 == handler_count_2
+        assert handler_count_1 == 2
+    finally:
+        added = list(root.handlers)
+        for h in added:
+            h.close()
+            root.removeHandler(h)
