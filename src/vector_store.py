@@ -1,8 +1,11 @@
 import json
+import logging
 from abc import ABC, abstractmethod
 import numpy as np
 from pymilvus import MilvusClient
 from src.models import Chunk, SearchResult
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStore(ABC):
@@ -74,6 +77,7 @@ class MilvusVectorStore(VectorStore):
             metric_type="COSINE",
             id_type="string",
         )
+        logger.info("创建 Milvus 集合: %s, dimension=%d", self.collection, self.dimension)
 
     def close(self):
         self.client.close()
@@ -94,19 +98,24 @@ class MilvusVectorStore(VectorStore):
         if not data:
             return 0
         result = self.client.upsert(collection_name=self.collection, data=data)
-        return result["upsert_count"]
+        count = result["upsert_count"]
+        logger.info("添加 chunks 到 Milvus: count=%d", count)
+        return count
 
     def delete_by_sn(self, source_sns: list[str]) -> int:
         if not source_sns:
             return 0
         filter_expr = " or ".join(f'source_sn == "{sn}"' for sn in source_sns)
         result = self.client.delete(collection_name=self.collection, filter=filter_expr)
-        return len(result) if isinstance(result, list) else 0
+        deleted = len(result) if isinstance(result, list) else 0
+        logger.info("从 Milvus 删除 chunks: count=%d", deleted)
+        return deleted
 
     def hybrid_search(
         self, query_vector: list[float], query_text: str,
         top_k: int, semantic_weight: float, keyword_weight: float,
     ) -> list[SearchResult]:
+        logger.debug("Milvus 搜索请求: top_k=%d, sem_w=%.2f, kw_w=%.2f", top_k, semantic_weight, keyword_weight)
         if keyword_weight > 0:
             return self._full_hybrid_search(query_vector, query_text, top_k, semantic_weight, keyword_weight)
         return self._semantic_only_search(query_vector, top_k)
