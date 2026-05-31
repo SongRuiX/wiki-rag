@@ -124,7 +124,10 @@ def main():
             })
         return json.dumps(items, ensure_ascii=False)
 
-    mcp.run(transport=transport)
+    try:
+        mcp.run(transport=transport)
+    except KeyboardInterrupt:
+        pass  # 用户按 CTRL+C 正常退出，不打印堆栈
 
 
 if __name__ == "__main__":
