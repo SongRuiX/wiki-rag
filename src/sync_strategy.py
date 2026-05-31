@@ -29,7 +29,7 @@ class SyncManager:
 
         if mode == "full":
             plan = SyncPlan(new_files=list(md_files.keys()), total_chunks_estimate=len(md_files))
-            self._full_sync(path, md_files)
+            actual_chunks = self._full_sync(path, md_files)
         else:
             old_meta = self._load_metadata(metadata_path)
             old_files = old_meta.get("files", {})
@@ -39,9 +39,12 @@ class SyncManager:
                 deleted_files=[f for f in old_files if f not in md_files],
             )
             plan.total_chunks_estimate = len(plan.new_files) + len(plan.updated_files)
-            self._execute_plan(path, plan)
+            actual_chunks = self._execute_plan(path, plan)
 
-        logger.info("变更统计: new=%d, updated=%d, deleted=%d", len(plan.new_files), len(plan.updated_files), len(plan.deleted_files))
+        plan.total_chunks_estimate = actual_chunks
+        logger.info("变更统计: new=%d, updated=%d, deleted=%d, chunks=%d",
+                     len(plan.new_files), len(plan.updated_files),
+                     len(plan.deleted_files), actual_chunks)
         self._save_metadata(metadata_path, md_files)
         logger.info("同步完成: path=%s", path)
         return plan
