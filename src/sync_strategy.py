@@ -86,9 +86,9 @@ class SyncManager:
             sns = [Path(f).stem for f in plan.deleted_files]
             self.vector_store.delete_by_sn(sns)
 
-    def _process_files(self, root: str, file_paths: list[str]):
+    def _process_files(self, root: str, file_paths: list[str]) -> int:
         if not file_paths:
-            return
+            return 0
         all_chunks = []
         for rel_path in file_paths:
             abs_path = os.path.join(root, rel_path)
@@ -100,3 +100,4 @@ class SyncManager:
             for chunk, vec in zip(all_chunks, vectors):
                 chunk.embedding = vec
             self.vector_store.add_chunks(all_chunks)
+        return len(all_chunks)
