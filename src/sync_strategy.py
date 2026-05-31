@@ -78,13 +78,14 @@ class SyncManager:
     def _full_sync(self, root: str, md_files: dict[str, str]) -> int:
         return self._process_files(root, list(md_files.keys()))
 
-    def _execute_plan(self, root: str, plan: SyncPlan):
+    def _execute_plan(self, root: str, plan: SyncPlan) -> int:
         changed = plan.new_files + plan.updated_files
-        if changed:
-            self._process_files(root, changed)
         if plan.deleted_files:
             sns = [Path(f).stem for f in plan.deleted_files]
             self.vector_store.delete_by_sn(sns)
+        if changed:
+            return self._process_files(root, changed)
+        return 0
 
     def _process_files(self, root: str, file_paths: list[str]) -> int:
         if not file_paths:
