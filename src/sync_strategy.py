@@ -75,8 +75,8 @@ class SyncManager:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    def _full_sync(self, root: str, md_files: dict[str, str]):
-        self._process_files(root, list(md_files.keys()))
+    def _full_sync(self, root: str, md_files: dict[str, str]) -> int:
+        return self._process_files(root, list(md_files.keys()))
 
     def _execute_plan(self, root: str, plan: SyncPlan):
         changed = plan.new_files + plan.updated_files
