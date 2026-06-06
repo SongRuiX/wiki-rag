@@ -8,7 +8,7 @@ embedding:
 vector_store:
   type: "milvus"
   milvus:
-    mode: "local"
+    mode: "remote"
     local_uri: "./milvus_wiki.db"
     remote_host: "localhost"
     remote_port: 19530
